@@ -1,5 +1,4 @@
 import type { Sandbox } from '@cloudflare/sandbox';
-
 /**
  * Environment bindings for the Moltbot Worker
  */
@@ -38,12 +37,17 @@ export interface MoltbotEnv {
   R2_SECRET_ACCESS_KEY?: string;
   R2_BUCKET_NAME?: string; // Override bucket name (default: 'moltbot-data')
   CF_ACCOUNT_ID?: string; // Cloudflare account ID for R2 endpoint
+  // Ollama direct provider (self-hosted models)
+  OLLAMA_BASE_URL?: string;
+  OLLAMA_CLIENT_ID?: string;
+  OLLAMA_CLIENT_SECRET?: string;
+  OLLAMA_MODEL?: string;
+  OLLAMA_PRIMARY?: string;
   // Browser Rendering binding for CDP shim
   BROWSER?: Fetcher;
   CDP_SECRET?: string; // Shared secret for CDP endpoint authentication
   WORKER_URL?: string; // Public URL of the worker (for CDP endpoint)
 }
-
 /**
  * Authenticated user from Cloudflare Access
  */
@@ -51,7 +55,6 @@ export interface AccessUser {
   email: string;
   name?: string;
 }
-
 /**
  * Hono app environment type
  */
@@ -62,7 +65,6 @@ export type AppEnv = {
     accessUser?: AccessUser;
   };
 };
-
 /**
  * JWT payload from Cloudflare Access
  */
