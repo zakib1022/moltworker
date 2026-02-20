@@ -43,6 +43,7 @@ export interface MoltbotEnv {
   OLLAMA_CLIENT_SECRET?: string;
   OLLAMA_MODEL?: string;
   OLLAMA_PRIMARY?: string;
+  OLLAMA_CONTEXT_WINDOW?: string;
   // Browser Rendering binding for CDP shim
   BROWSER?: Fetcher;
   CDP_SECRET?: string; // Shared secret for CDP endpoint authentication
