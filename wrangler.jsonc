@@ -21,7 +21,7 @@
     "binding": "ASSETS",
     "run_worker_first": true,
   },
-  // Allow importing HTML files as text modules and PNG files as binary
+  // Allow importing HTML files as text modules and PNG files as binary (adding comment for a redeployment)
   "rules": [
     {
       "type": "Text",
