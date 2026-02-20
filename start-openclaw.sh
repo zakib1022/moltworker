@@ -322,6 +322,47 @@ console.log('Configuration patched successfully');
 EOFPATCH
 
 # ============================================================
+# PATCH AUTH PROFILES (required for Ollama and other providers)
+# ============================================================
+node << 'EOFAUTH'
+const fs = require('fs');
+const path = require('path');
+
+const authDir = '/root/.openclaw/agents/main/agent';
+const authPath = path.join(authDir, 'auth-profiles.json');
+
+console.log('Patching auth profiles at:', authPath);
+
+// Ensure directory exists
+fs.mkdirSync(authDir, { recursive: true });
+
+let auth = {};
+try {
+    auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+} catch (e) {
+    console.log('Starting with empty auth profiles');
+}
+
+// Add Ollama auth profile
+if (process.env.OLLAMA_BASE_URL) {
+    auth['ollama-direct'] = {
+        apiKey: 'ollama',  // Placeholder - Ollama doesn't need real API key
+    };
+    // Add CF Access headers if provided
+    if (process.env.OLLAMA_CLIENT_ID && process.env.OLLAMA_CLIENT_SECRET) {
+        auth['ollama-direct'].headers = {
+            'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
+            'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
+        };
+    }
+    console.log('Added ollama-direct auth profile');
+}
+
+fs.writeFileSync(authPath, JSON.stringify(auth, null, 2));
+console.log('Auth profiles patched successfully');
+EOFAUTH
+
+# ============================================================
 # BACKGROUND SYNC LOOP
 # ============================================================
 if r2_configured; then
