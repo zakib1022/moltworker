@@ -33,7 +33,7 @@ RUN mkdir -p /root/.openclaw \
 
 # Copy startup script
 # Build cache bust: 2026-02-20-v32-force
-ENV CACHE_BUST="2026-02-20-v32"
+ENV CACHE_BUST="2026-02-20-v33"
 COPY start-openclaw.sh /usr/local/bin/start-openclaw.sh
 RUN chmod +x /usr/local/bin/start-openclaw.sh
 
