@@ -9,10 +9,13 @@
 
 set -e
 
-if pgrep -f "openclaw gateway" > /dev/null 2>&1; then
-    echo "OpenClaw gateway is already running, exiting."
-    exit 0
-fi
+# Kill any existing gateway processes before starting
+echo "Cleaning up any existing gateway processes..."
+pkill -f "openclaw gateway" 2>/dev/null || true
+pkill -f "openclaw.*gateway" 2>/dev/null || true
+pkill -f "node.*openclaw" 2>/dev/null || true
+sleep 2
+echo "Cleanup complete"
 
 CONFIG_DIR="/root/.openclaw"
 CONFIG_FILE="$CONFIG_DIR/openclaw.json"
