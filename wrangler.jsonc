@@ -10,10 +10,12 @@
   "vars": {
     "DEBUG_ROUTES": "true",
     "OLLAMA_BASE_URL": "https://tools.zakibclaw.com/v1",
-    "OLLAMA_MODEL": "llama3.2:3b",
+    "OLLAMA_MODEL": "llama3.1:8b",
+    "OLLAMA_CONTEXT_WINDOW": "32000",
     "OLLAMA_PRIMARY": "true"
   },
   // Static assets for admin UI (built by vite)
+  // Allow importing HTML files as text modules and PNG files as binary (adding comment for a redeployment)
   "assets": {
     "directory": "./dist/client",
     "not_found_handling": "single-page-application",
@@ -21,7 +23,6 @@
     "binding": "ASSETS",
     "run_worker_first": true,
   },
-  // Allow importing HTML files as text modules and PNG files as binary (adding comment for a redeployment)
   "rules": [
     {
       "type": "Text",
@@ -34,11 +35,9 @@
       "fallthrough": false,
     },
   ],
-  // Build command for vite
   "build": {
     "command": "npm run build",
   },
-  // Container configuration for the Moltbot sandbox
   "containers": [
     {
       "class_name": "Sandbox",
@@ -61,14 +60,12 @@
       "tag": "v1",
     },
   ],
-  // R2 bucket for persistent storage (moltbot data, conversations, etc.)
   "r2_buckets": [
     {
       "binding": "MOLTBOT_BUCKET",
       "bucket_name": "moltbot-data-dev",
     },
   ],
-  // Browser Rendering binding for CDP shim
   "browser": {
     "binding": "BROWSER",
   },
