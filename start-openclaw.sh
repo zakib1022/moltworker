@@ -138,6 +138,7 @@ fi
 # - Gateway token auth
 # - Trusted proxies for sandbox networking
 # - Base URL override for legacy AI Gateway path
+# - Ollama direct provider for self-hosted models
 node << 'EOFPATCH'
 const fs = require('fs');
 
@@ -216,6 +217,59 @@ if (process.env.CF_AI_GATEWAY_MODEL) {
         console.log('AI Gateway model override: provider=' + providerName + ' model=' + modelId + ' via ' + baseUrl);
     } else {
         console.warn('CF_AI_GATEWAY_MODEL set but missing required config (account ID, gateway ID, or API key)');
+    }
+}
+
+// Ollama direct provider (self-hosted models via Ollama)
+// Environment variables:
+//   OLLAMA_BASE_URL - Ollama endpoint (e.g. https://tools.zakibclaw.com/v1)
+//   OLLAMA_CLIENT_ID - CF Access Client ID (for tunnels protected by Access)
+//   OLLAMA_CLIENT_SECRET - CF Access Client Secret
+//   OLLAMA_MODEL - Model ID (default: llama3.2:3b)
+//   OLLAMA_MODEL_NAME - Display name (default: same as model ID)
+//   OLLAMA_CONTEXT_WINDOW - Context window size (default: 8192)
+//   OLLAMA_MAX_TOKENS - Max output tokens (default: 4096)
+//   OLLAMA_PRIMARY - Set to 'true' to make Ollama the default model
+if (process.env.OLLAMA_BASE_URL) {
+    const baseUrl = process.env.OLLAMA_BASE_URL;
+    const modelId = process.env.OLLAMA_MODEL || 'llama3.2:3b';
+    const modelName = process.env.OLLAMA_MODEL_NAME || modelId;
+    const contextWindow = parseInt(process.env.OLLAMA_CONTEXT_WINDOW || '8192', 10);
+    const maxTokens = parseInt(process.env.OLLAMA_MAX_TOKENS || '4096', 10);
+    const providerName = 'ollama-direct';
+
+    config.models = config.models || {};
+    config.models.providers = config.models.providers || {};
+
+    const providerEntry = {
+        baseUrl: baseUrl,
+        api: 'openai-completions',
+        models: [{ 
+            id: modelId, 
+            name: modelName, 
+            contextWindow: contextWindow, 
+            maxTokens: maxTokens 
+        }],
+    };
+
+    // Add CF Access headers if credentials provided
+    if (process.env.OLLAMA_CLIENT_ID && process.env.OLLAMA_CLIENT_SECRET) {
+        providerEntry.headers = {
+            'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
+            'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
+        };
+    }
+
+    config.models.providers[providerName] = providerEntry;
+
+    // Set as primary model if requested
+    if (process.env.OLLAMA_PRIMARY === 'true') {
+        config.agents = config.agents || {};
+        config.agents.defaults = config.agents.defaults || {};
+        config.agents.defaults.model = { primary: providerName + '/' + modelId };
+        console.log('Ollama set as primary model: ' + providerName + '/' + modelId + ' via ' + baseUrl);
+    } else {
+        console.log('Ollama provider added: ' + providerName + '/' + modelId + ' via ' + baseUrl);
     }
 }
 
