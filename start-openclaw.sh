@@ -362,6 +362,10 @@ fs.writeFileSync(authPath, JSON.stringify(auth, null, 2));
 console.log('Auth profiles patched successfully');
 EOFAUTH
 
+# Debug: show auth profiles contents
+echo "Auth profiles contents:"
+cat /root/.openclaw/agents/main/agent/auth-profiles.json
+
 # ============================================================
 # BACKGROUND SYNC LOOP
 # ============================================================
