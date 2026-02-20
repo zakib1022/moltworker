@@ -32,7 +32,8 @@ RUN mkdir -p /root/.openclaw \
     && mkdir -p /root/clawd/skills
 
 # Copy startup script
-# Build cache bust: 2026-02-20-v31-cleanup
+# Build cache bust: 2026-02-20-v32-force
+ENV CACHE_BUST="2026-02-20-v32"
 COPY start-openclaw.sh /usr/local/bin/start-openclaw.sh
 RUN chmod +x /usr/local/bin/start-openclaw.sh
 
