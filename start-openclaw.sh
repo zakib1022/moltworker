@@ -345,12 +345,17 @@ try {
 
 // Add Ollama auth profile
 if (process.env.OLLAMA_BASE_URL) {
-    auth['ollama-direct'] = {
-        apiKey: 'ollama',  // Placeholder - Ollama doesn't need real API key
+    // Ensure profiles structure exists
+    auth.profiles = auth.profiles || {};
+    
+    auth.profiles['ollama-direct'] = {
+        type: 'api_key',
+        provider: 'ollama-direct',
+        key: 'ollama',  // Placeholder - Ollama doesn't need real API key
     };
     // Add CF Access headers if provided
     if (process.env.OLLAMA_CLIENT_ID && process.env.OLLAMA_CLIENT_SECRET) {
-        auth['ollama-direct'].headers = {
+        auth.profiles['ollama-direct'].headers = {
             'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
             'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
         };
