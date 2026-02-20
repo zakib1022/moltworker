@@ -54,5 +54,6 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
   if (env.OLLAMA_CLIENT_SECRET) envVars.OLLAMA_CLIENT_SECRET = env.OLLAMA_CLIENT_SECRET;
   if (env.OLLAMA_MODEL) envVars.OLLAMA_MODEL = env.OLLAMA_MODEL;
   if (env.OLLAMA_PRIMARY) envVars.OLLAMA_PRIMARY = env.OLLAMA_PRIMARY;
+  if (env.OLLAMA_CONTEXT_WINDOW) envVars.OLLAMA_CONTEXT_WINDOW = env.OLLAMA_CONTEXT_WINDOW;
   return envVars;
 }
