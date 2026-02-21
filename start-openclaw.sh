@@ -29,6 +29,18 @@ echo "Config directory: $CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"
 
 # ============================================================
+# DEBUG: Show Ollama env vars
+# ============================================================
+echo "=== OLLAMA ENV VARS ==="
+echo "OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-not set}"
+echo "OLLAMA_MODEL: ${OLLAMA_MODEL:-not set}"
+echo "OLLAMA_PRIMARY: ${OLLAMA_PRIMARY:-not set}"
+echo "OLLAMA_CONTEXT_WINDOW: ${OLLAMA_CONTEXT_WINDOW:-not set}"
+echo "OLLAMA_CLIENT_ID: ${OLLAMA_CLIENT_ID:+SET (hidden)}"
+echo "OLLAMA_CLIENT_SECRET: ${OLLAMA_CLIENT_SECRET:+SET (hidden)}"
+echo "======================="
+
+# ============================================================
 # RCLONE SETUP
 # ============================================================
 
@@ -210,43 +222,42 @@ if (process.env.CF_AI_GATEWAY_MODEL) {
         config.models.providers = config.models.providers || {};
         config.models.providers[providerName] = {
             baseUrl: baseUrl,
-            apiKey: apiKey,
             api: api,
-            models: [{ id: modelId, name: modelId, contextWindow: 131072, maxTokens: 8192 }],
+            models: [{ id: modelId, name: modelId, contextWindow: 128000, maxTokens: 4096 }]
         };
+
         config.agents = config.agents || {};
         config.agents.defaults = config.agents.defaults || {};
         config.agents.defaults.model = { primary: providerName + '/' + modelId };
-        console.log('AI Gateway model override: provider=' + providerName + ' model=' + modelId + ' via ' + baseUrl);
-    } else {
-        console.warn('CF_AI_GATEWAY_MODEL set but missing required config (account ID, gateway ID, or API key)');
+        console.log('AI Gateway provider added: ' + providerName + '/' + modelId + ' via ' + baseUrl);
     }
 }
 
-// Ollama direct provider (self-hosted models via Ollama)
+// Ollama direct provider (self-hosted models via Cloudflare Tunnel)
 // Environment variables:
 //   OLLAMA_BASE_URL - Ollama endpoint (e.g. https://tools.zakibclaw.com/v1)
 //   OLLAMA_CLIENT_ID - CF Access Client ID (for tunnels protected by Access)
 //   OLLAMA_CLIENT_SECRET - CF Access Client Secret
 //   OLLAMA_MODEL - Model ID (default: llama3.2:3b)
 //   OLLAMA_MODEL_NAME - Display name (default: same as model ID)
-//   OLLAMA_CONTEXT_WINDOW - Context window size (default: 8192)
-//   OLLAMA_MAX_TOKENS - Max output tokens (default: 4096)
+//   OLLAMA_CONTEXT_WINDOW - Context window size (default: 32000)
+//   OLLAMA_MAX_TOKENS - Max output tokens (default: 16000)
 //   OLLAMA_PRIMARY - Set to 'true' to make Ollama the default model
 if (process.env.OLLAMA_BASE_URL) {
     const baseUrl = process.env.OLLAMA_BASE_URL;
     const modelId = process.env.OLLAMA_MODEL || 'llama3.2:3b';
     const modelName = process.env.OLLAMA_MODEL_NAME || modelId;
-    const contextWindow = parseInt(process.env.OLLAMA_CONTEXT_WINDOW || '8192', 10);
-    const maxTokens = parseInt(process.env.OLLAMA_MAX_TOKENS || '4096', 10);
+    const contextWindow = parseInt(process.env.OLLAMA_CONTEXT_WINDOW || '32000', 10);
+    const maxTokens = parseInt(process.env.OLLAMA_MAX_TOKENS || '16000', 10);
     const providerName = 'ollama-direct';
 
     config.models = config.models || {};
     config.models.providers = config.models.providers || {};
 
+    // IMPORTANT: Use openai-responses API for better compatibility
     const providerEntry = {
         baseUrl: baseUrl,
-        api: 'openai-completions',
+        api: 'openai-responses',
         models: [{ 
             id: modelId, 
             name: modelName, 
@@ -261,6 +272,7 @@ if (process.env.OLLAMA_BASE_URL) {
             'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
             'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
         };
+        console.log('Ollama headers configured for CF Access');
     }
 
     config.models.providers[providerName] = providerEntry;
@@ -322,6 +334,18 @@ console.log('Configuration patched successfully');
 EOFPATCH
 
 # ============================================================
+# DEBUG: Show provider config after patching
+# ============================================================
+echo "=== PROVIDER CONFIG AFTER PATCH ==="
+node -e "
+const fs = require('fs');
+const config = JSON.parse(fs.readFileSync('/root/.openclaw/openclaw.json'));
+console.log('Providers:', JSON.stringify(config.models?.providers || {}, null, 2));
+console.log('Primary model:', config.agents?.defaults?.model?.primary || 'not set');
+"
+echo "==================================="
+
+# ============================================================
 # PATCH AUTH PROFILES (required for Ollama and other providers)
 # ============================================================
 node << 'EOFAUTH'
@@ -336,18 +360,21 @@ console.log('Patching auth profiles at:', authPath);
 // Ensure directory exists
 fs.mkdirSync(authDir, { recursive: true });
 
-let auth = {};
+let auth = { version: 1, profiles: {} };
 try {
-    auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+    const existing = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+    // Preserve existing structure but ensure version and profiles exist
+    auth = {
+        ...existing,
+        version: existing.version || 1,
+        profiles: existing.profiles || {}
+    };
 } catch (e) {
     console.log('Starting with empty auth profiles');
 }
 
 // Add Ollama auth profile
 if (process.env.OLLAMA_BASE_URL) {
-    // Ensure profiles structure exists
-    auth.profiles = auth.profiles || {};
-    
     auth.profiles['ollama-direct'] = {
         type: 'api_key',
         provider: 'ollama-direct',
@@ -359,6 +386,7 @@ if (process.env.OLLAMA_BASE_URL) {
             'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
             'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
         };
+        console.log('Auth profile headers configured for CF Access');
     }
     console.log('Added ollama-direct auth profile');
 }
@@ -368,8 +396,10 @@ console.log('Auth profiles patched successfully');
 EOFAUTH
 
 # Debug: show auth profiles contents
-echo "Auth profiles contents:"
+echo "=== AUTH PROFILES ==="
 cat /root/.openclaw/agents/main/agent/auth-profiles.json
+echo ""
+echo "===================="
 
 # ============================================================
 # BACKGROUND SYNC LOOP
