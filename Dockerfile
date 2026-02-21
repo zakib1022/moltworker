@@ -32,8 +32,8 @@ RUN mkdir -p /root/.openclaw \
     && mkdir -p /root/clawd/skills
 
 # Copy startup script
-# Build cache bust: 2026-02-20-v36-force
-ENV CACHE_BUST="2026-02-20-v36"
+# Build cache bust: v37-openai-responses-fix
+ENV CACHE_BUST="2026-02-21-v37"
 COPY start-openclaw.sh /usr/local/bin/start-openclaw.sh
 RUN chmod +x /usr/local/bin/start-openclaw.sh
 
