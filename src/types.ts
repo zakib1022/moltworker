@@ -44,6 +44,8 @@ export interface MoltbotEnv {
   OLLAMA_MODEL?: string;
   OLLAMA_PRIMARY?: string;
   OLLAMA_CONTEXT_WINDOW?: string;
+  // OpenRouter provider (500+ models via single API key)
+  OPENROUTER_API_KEY?: string;
   // Browser Rendering binding for CDP shim
   BROWSER?: Fetcher;
   CDP_SECRET?: string; // Shared secret for CDP endpoint authentication
