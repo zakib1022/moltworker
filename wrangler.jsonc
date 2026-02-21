@@ -50,7 +50,7 @@
     "bindings": [
       {
         "class_name": "Sandbox",
-        "name": "Sandboxv2",
+        "name": "Sandbox",
       },
     ],
   },
