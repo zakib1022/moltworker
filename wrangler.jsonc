@@ -10,7 +10,7 @@
   "vars": {
     "DEBUG_ROUTES": "true",
     "OLLAMA_BASE_URL": "https://tools.zakibclaw.com/v1",
-    "OLLAMA_MODEL": "qwen2.5-coder:14b",
+    "OLLAMA_MODEL": "qwen2.5:14b",
     "OLLAMA_CONTEXT_WINDOW": "32000",
     "OLLAMA_PRIMARY": "true"
   },
@@ -50,7 +50,7 @@
     "bindings": [
       {
         "class_name": "Sandbox",
-        "name": "Sandbox",
+        "name": "Sandboxv2",
       },
     ],
   },
