@@ -382,6 +382,62 @@ if (process.env.OPENROUTER_API_KEY) {
     }
 }
 
+// ============================================================
+// Memory Search (Embeddings)
+// Primary:  nomic-embed-text via Ollama tunnel — free, local, no tokens burned
+// Fallback: automatic BM25 keyword search when tunnel is down (no config needed,
+//           OpenClaw degrades gracefully rather than erroring out)
+// Why nomic-embed-text: 274 MB, purpose-built for embeddings, fast on M4.
+// Setup required on Mac mini: ollama pull nomic-embed-text
+// ============================================================
+if (process.env.OLLAMA_BASE_URL) {
+    config.agents.defaults.memorySearch = {
+        provider: 'openai',   // OpenAI-compatible endpoint format
+        model: 'nomic-embed-text',
+        remote: {
+            baseUrl: process.env.OLLAMA_BASE_URL,
+            apiKey: 'ollama', // Ollama doesn't require a real key
+        },
+        // Hybrid search: vector (semantic) + BM25 (keyword) combined
+        // When tunnel is down, vector fails silently and BM25 carries the load
+        query: {
+            hybrid: {
+                enabled: true,
+                vectorWeight: 0.7,
+                textWeight: 0.3,
+                candidateMultiplier: 4
+            }
+        },
+        // Cache embeddings in SQLite — avoids re-embedding unchanged memory files
+        cache: {
+            enabled: true,
+            maxEntries: 50000
+        }
+    };
+
+    // CF Access headers for the tunnel
+    if (process.env.OLLAMA_CLIENT_ID && process.env.OLLAMA_CLIENT_SECRET) {
+        config.agents.defaults.memorySearch.remote.headers = {
+            'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
+            'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
+        };
+    }
+
+    // When Ollama tunnel is unreachable, fall back to Gemini embeddings (free tier)
+    // rather than dropping all the way to BM25-only keyword search
+    if (process.env.GEMINI_API_KEY) {
+        config.agents.defaults.memorySearch.fallback = 'gemini';
+        console.log('Memory search fallback: Gemini embeddings (tunnel offline)');
+    }
+
+    console.log('Memory search: nomic-embed-text via Ollama tunnel (BM25 fallback when offline)');
+} else {
+    // No Ollama configured — enable BM25 keyword search only
+    // memorySearch is enabled by default in OpenClaw, this is just defensive
+    config.agents.defaults.memorySearch = { enabled: true };
+    console.log('Memory search: BM25 keyword only (Ollama not configured)');
+}
+
 // Telegram configuration
 // Overwrite entire channel object to drop stale keys from old R2 backups
 // that would fail OpenClaw's strict config validation (see #47)
@@ -483,6 +539,16 @@ if (process.env.OLLAMA_BASE_URL) {
         console.log('Auth profile headers configured for CF Access');
     }
     console.log('Added ollama-direct auth profile');
+}
+
+// Add Gemini auth profile (used as memory embedding fallback when Ollama tunnel is down)
+if (process.env.GEMINI_API_KEY) {
+    auth.profiles['google'] = {
+        type: 'api_key',
+        provider: 'google',
+        key: process.env.GEMINI_API_KEY,
+    };
+    console.log('Added google auth profile (Gemini embedding fallback)');
 }
 
 // Add OpenRouter auth profile
