@@ -12,8 +12,7 @@
     "OLLAMA_BASE_URL": "https://tools.zakibclaw.com/v1",
     "OLLAMA_MODEL": "qwen-openclaw",
     "OLLAMA_CONTEXT_WINDOW": "16000",
-    "OLLAMA_PRIMARY": "true",
-    "R2_BUCKET_NAME": "moltbot-data-dev"
+    "OLLAMA_PRIMARY": "true"
   },
   // Static assets for admin UI (built by vite)
   // Allow importing HTML files as text modules and PNG files as binary (adding comment for a redeployment)
