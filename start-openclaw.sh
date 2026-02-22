@@ -9,10 +9,13 @@
 
 set -e
 
-if pgrep -f "openclaw gateway" > /dev/null 2>&1; then
-    echo "OpenClaw gateway is already running, exiting."
-    exit 0
-fi
+# Kill any existing gateway processes before starting
+echo "Cleaning up any existing gateway processes..."
+pkill -f "openclaw gateway" 2>/dev/null || true
+pkill -f "openclaw.*gateway" 2>/dev/null || true
+pkill -f "node.*openclaw" 2>/dev/null || true
+sleep 2
+echo "Cleanup complete"
 
 CONFIG_DIR="/root/.openclaw"
 CONFIG_FILE="$CONFIG_DIR/openclaw.json"
@@ -26,6 +29,22 @@ echo "Config directory: $CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"
 
 # ============================================================
+# DEBUG: Show Ollama env vars
+# ============================================================
+echo "=== OLLAMA ENV VARS ==="
+echo "OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-not set}"
+echo "OLLAMA_MODEL: ${OLLAMA_MODEL:-not set}"
+echo "OLLAMA_PRIMARY: ${OLLAMA_PRIMARY:-not set}"
+echo "OLLAMA_CONTEXT_WINDOW: ${OLLAMA_CONTEXT_WINDOW:-not set}"
+echo "OLLAMA_CLIENT_ID: ${OLLAMA_CLIENT_ID:+SET (hidden)}"
+echo "OLLAMA_CLIENT_SECRET: ${OLLAMA_CLIENT_SECRET:+SET (hidden)}"
+echo "======================="
+
+echo "=== OPENROUTER ENV VARS ==="
+echo "OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:+SET (hidden)}"
+echo "==========================="
+
+# ============================================================
 # RCLONE SETUP
 # ============================================================
 
@@ -33,7 +52,6 @@ r2_configured() {
     [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$CF_ACCOUNT_ID" ]
 }
 
-R2_BUCKET="${R2_BUCKET_NAME:-moltbot-data}"
 
 setup_rclone() {
     mkdir -p "$(dirname "$RCLONE_CONF")"
@@ -138,6 +156,7 @@ fi
 # - Gateway token auth
 # - Trusted proxies for sandbox networking
 # - Base URL override for legacy AI Gateway path
+# - Ollama direct provider for self-hosted models
 node << 'EOFPATCH'
 const fs = require('fs');
 
@@ -206,17 +225,217 @@ if (process.env.CF_AI_GATEWAY_MODEL) {
         config.models.providers = config.models.providers || {};
         config.models.providers[providerName] = {
             baseUrl: baseUrl,
-            apiKey: apiKey,
             api: api,
-            models: [{ id: modelId, name: modelId, contextWindow: 131072, maxTokens: 8192 }],
+            models: [{ id: modelId, name: modelId, contextWindow: 128000, maxTokens: 4096 }]
         };
+
         config.agents = config.agents || {};
         config.agents.defaults = config.agents.defaults || {};
         config.agents.defaults.model = { primary: providerName + '/' + modelId };
-        console.log('AI Gateway model override: provider=' + providerName + ' model=' + modelId + ' via ' + baseUrl);
-    } else {
-        console.warn('CF_AI_GATEWAY_MODEL set but missing required config (account ID, gateway ID, or API key)');
+        console.log('AI Gateway provider added: ' + providerName + '/' + modelId + ' via ' + baseUrl);
     }
+}
+
+// Ollama direct provider (self-hosted models via Cloudflare Tunnel)
+// Environment variables:
+//   OLLAMA_BASE_URL - Ollama endpoint (e.g. https://tools.zakibclaw.com/v1)
+//   OLLAMA_CLIENT_ID - CF Access Client ID (for tunnels protected by Access)
+//   OLLAMA_CLIENT_SECRET - CF Access Client Secret
+//   OLLAMA_MODEL - Model ID (default: llama3.2:3b)
+//   OLLAMA_MODEL_NAME - Display name (default: same as model ID)
+//   OLLAMA_CONTEXT_WINDOW - Context window size (default: 32000)
+//   OLLAMA_MAX_TOKENS - Max output tokens (default: 16000)
+//   OLLAMA_PRIMARY - Set to 'true' to make Ollama the default model
+if (process.env.OLLAMA_BASE_URL) {
+    const baseUrl = process.env.OLLAMA_BASE_URL;
+    const modelId = process.env.OLLAMA_MODEL || 'llama3.2:3b';
+    const modelName = process.env.OLLAMA_MODEL_NAME || modelId;
+    const contextWindow = parseInt(process.env.OLLAMA_CONTEXT_WINDOW || '32000', 10);
+    const maxTokens = parseInt(process.env.OLLAMA_MAX_TOKENS || '16000', 10);
+    const providerName = 'ollama-direct';
+
+    config.models = config.models || {};
+    config.models.providers = config.models.providers || {};
+
+    // IMPORTANT: Use openai-responses API for better compatibility
+    const providerEntry = {
+        baseUrl: baseUrl,
+        api: 'openai-responses',
+        models: [{ 
+            id: modelId, 
+            name: modelName, 
+            contextWindow: contextWindow, 
+            maxTokens: maxTokens 
+        }],
+    };
+
+    // Add CF Access headers if credentials provided
+    if (process.env.OLLAMA_CLIENT_ID && process.env.OLLAMA_CLIENT_SECRET) {
+        providerEntry.headers = {
+            'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
+            'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
+        };
+        console.log('Ollama headers configured for CF Access');
+    }
+
+    config.models.providers[providerName] = providerEntry;
+
+    // Set as primary model if requested
+    if (process.env.OLLAMA_PRIMARY === 'true') {
+        config.agents = config.agents || {};
+        config.agents.defaults = config.agents.defaults || {};
+        config.agents.defaults.model = { primary: providerName + '/' + modelId };
+        console.log('Ollama set as primary model: ' + providerName + '/' + modelId + ' via ' + baseUrl);
+    } else {
+        console.log('Ollama provider added: ' + providerName + '/' + modelId + ' via ' + baseUrl);
+    }
+}
+
+// ============================================================
+// OpenRouter Provider
+// Single API key for 500+ models including Anthropic, Google, DeepSeek.
+// Used for fallbacks, heartbeat, subagents, and direct model switching.
+// ============================================================
+if (process.env.OPENROUTER_API_KEY) {
+    config.models = config.models || {};
+    config.models.providers = config.models.providers || {};
+
+    config.models.providers['openrouter'] = {
+        baseUrl: 'https://openrouter.ai/api/v1',
+        api: 'openai-responses',
+        models: [
+            // Anthropic via OpenRouter (same price as direct, no AI Gateway needed)
+            { id: 'anthropic/claude-haiku-4-5', name: 'Claude Haiku 4.5', contextWindow: 200000, maxTokens: 8000 },
+            { id: 'anthropic/claude-sonnet-4-5', name: 'Claude Sonnet 4.5', contextWindow: 200000, maxTokens: 8000 },
+            // Heartbeat / throwaway tier
+            { id: 'google/gemini-2.5-flash-lite-preview-06-17', name: 'Gemini 2.5 Flash Lite', contextWindow: 100000, maxTokens: 8000 },
+            // Cheap reasoning
+            { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', contextWindow: 64000, maxTokens: 8000 },
+            { id: 'deepseek/deepseek-reasoner', name: 'DeepSeek R1', contextWindow: 64000, maxTokens: 8000 },
+            // Mid-tier
+            { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextWindow: 100000, maxTokens: 8000 },
+            // Free (rate-limited, good for testing)
+            { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (free)', contextWindow: 64000, maxTokens: 8000 },
+        ]
+    };
+    console.log('OpenRouter provider added with ' + config.models.providers['openrouter'].models.length + ' models');
+}
+
+// ============================================================
+// Unified Routing Config
+// Runs AFTER all providers are registered.
+// Sets: fallback chain, heartbeat, subagents, model aliases.
+// AI Gateway config above is preserved and still works if those
+// secrets are set — we just don't depend on it for routing.
+// ============================================================
+{
+    config.agents = config.agents || {};
+    config.agents.defaults = config.agents.defaults || {};
+    config.agents.defaults.models = config.agents.defaults.models || {};
+
+    // Model aliases — use /model <alias> in chat to switch models
+    if (process.env.OLLAMA_BASE_URL && process.env.OLLAMA_MODEL) {
+        config.agents.defaults.models['ollama-direct/' + process.env.OLLAMA_MODEL] = { alias: 'local' };
+    }
+    if (process.env.OPENROUTER_API_KEY) {
+        config.agents.defaults.models['openrouter/anthropic/claude-haiku-4-5']                    = { alias: 'haiku' };
+        config.agents.defaults.models['openrouter/anthropic/claude-sonnet-4-5']                   = { alias: 'sonnet' };
+        config.agents.defaults.models['openrouter/google/gemini-2.5-flash-lite-preview-06-17']    = { alias: 'flash' };
+        config.agents.defaults.models['openrouter/deepseek/deepseek-chat']                        = { alias: 'ds' };
+        config.agents.defaults.models['openrouter/deepseek/deepseek-reasoner']                    = { alias: 'r1' };
+        config.agents.defaults.models['openrouter/google/gemini-2.5-flash']                       = { alias: 'gemini' };
+        config.agents.defaults.models['openrouter/deepseek/deepseek-r1:free']                     = { alias: 'r1free' };
+    }
+
+    // Fallback chain — only set when OpenRouter is available
+    if (process.env.OPENROUTER_API_KEY) {
+        const currentPrimary = config.agents.defaults.model && config.agents.defaults.model.primary;
+        const fallbacks = [];
+
+        // Local is primary → cheap cloud next → Haiku as reliable last resort
+        if (currentPrimary && currentPrimary.startsWith('ollama-direct/')) {
+            fallbacks.push('openrouter/deepseek/deepseek-chat');
+        }
+        fallbacks.push('openrouter/anthropic/claude-haiku-4-5');
+
+        config.agents.defaults.model = {
+            ...config.agents.defaults.model,
+            fallbacks: fallbacks
+        };
+
+        // Heartbeat: cheapest model — just a liveness ping, not a real task
+        config.agents.defaults.heartbeat = {
+            model: 'openrouter/google/gemini-2.5-flash-lite-preview-06-17'
+        };
+
+        // Subagents: cheap but agentic-capable
+        config.agents.defaults.subagents = {
+            model: 'openrouter/deepseek/deepseek-chat',
+            maxConcurrent: 1,
+            archiveAfterMinutes: 60
+        };
+
+        console.log('Primary: ' + (currentPrimary || 'default'));
+        console.log('Fallbacks: ' + fallbacks.join(' → '));
+        console.log('Heartbeat: openrouter/google/gemini-2.5-flash-lite-preview-06-17');
+        console.log('Subagents: openrouter/deepseek/deepseek-chat');
+    }
+}
+
+// ============================================================
+// Memory Search (Embeddings)
+// Primary:  nomic-embed-text via Ollama tunnel — free, local, no tokens burned
+// Fallback: automatic BM25 keyword search when tunnel is down (no config needed,
+//           OpenClaw degrades gracefully rather than erroring out)
+// Why nomic-embed-text: 274 MB, purpose-built for embeddings, fast on M4.
+// Setup required on Mac mini: ollama pull nomic-embed-text
+// ============================================================
+if (process.env.OLLAMA_BASE_URL) {
+    config.agents.defaults.memorySearch = {
+        provider: 'openai',   // OpenAI-compatible endpoint format
+        model: 'nomic-embed-text',
+        remote: {
+            baseUrl: process.env.OLLAMA_BASE_URL,
+            apiKey: 'ollama', // Ollama doesn't require a real key
+        },
+        // Hybrid search: vector (semantic) + BM25 (keyword) combined
+        // When tunnel is down, vector fails silently and BM25 carries the load
+        query: {
+            hybrid: {
+                enabled: true,
+                vectorWeight: 0.7,
+                textWeight: 0.3,
+                candidateMultiplier: 4
+            }
+        },
+        // Cache embeddings in SQLite — avoids re-embedding unchanged memory files
+        cache: {
+            enabled: true,
+            maxEntries: 50000
+        }
+    };
+
+    // CF Access headers for the tunnel
+    if (process.env.OLLAMA_CLIENT_ID && process.env.OLLAMA_CLIENT_SECRET) {
+        config.agents.defaults.memorySearch.remote.headers = {
+            'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
+            'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
+        };
+    }
+
+    // When Ollama tunnel is unreachable, fall back to Gemini embeddings (free tier)
+    // rather than dropping all the way to BM25-only keyword search
+    if (process.env.GEMINI_API_KEY) {
+        config.agents.defaults.memorySearch.fallback = 'gemini';
+        console.log('Memory search fallback: Gemini embeddings (tunnel offline)');
+    }
+
+    console.log('Memory search: nomic-embed-text via Ollama tunnel (BM25 fallback when offline)');
+} else {
+    // No Ollama configured — enable BM25 keyword search only
+    // memorySearch is enabled by default in OpenClaw, this is just defensive
+    config.agents.defaults.memorySearch = { enabled: true };
+    console.log('Memory search: BM25 keyword only (Ollama not configured)');
 }
 
 // Telegram configuration
@@ -263,6 +482,94 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 console.log('Configuration patched successfully');
 EOFPATCH
+
+# ============================================================
+# DEBUG: Show provider config after patching
+# ============================================================
+echo "=== PROVIDER CONFIG AFTER PATCH ==="
+node -e "
+const fs = require('fs');
+const config = JSON.parse(fs.readFileSync('/root/.openclaw/openclaw.json'));
+console.log('Providers:', JSON.stringify(config.models?.providers || {}, null, 2));
+console.log('Primary model:', config.agents?.defaults?.model?.primary || 'not set');
+"
+echo "==================================="
+
+# ============================================================
+# PATCH AUTH PROFILES (required for Ollama and other providers)
+# ============================================================
+node << 'EOFAUTH'
+const fs = require('fs');
+const path = require('path');
+
+const authDir = '/root/.openclaw/agents/main/agent';
+const authPath = path.join(authDir, 'auth-profiles.json');
+
+console.log('Patching auth profiles at:', authPath);
+
+// Ensure directory exists
+fs.mkdirSync(authDir, { recursive: true });
+
+let auth = { version: 1, profiles: {} };
+try {
+    const existing = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+    // Preserve existing structure but ensure version and profiles exist
+    auth = {
+        ...existing,
+        version: existing.version || 1,
+        profiles: existing.profiles || {}
+    };
+} catch (e) {
+    console.log('Starting with empty auth profiles');
+}
+
+// Add Ollama auth profile
+if (process.env.OLLAMA_BASE_URL) {
+    auth.profiles['ollama-direct'] = {
+        type: 'api_key',
+        provider: 'ollama-direct',
+        key: 'ollama',  // Placeholder - Ollama doesn't need real API key
+    };
+    // Add CF Access headers if provided
+    if (process.env.OLLAMA_CLIENT_ID && process.env.OLLAMA_CLIENT_SECRET) {
+        auth.profiles['ollama-direct'].headers = {
+            'CF-Access-Client-Id': process.env.OLLAMA_CLIENT_ID,
+            'CF-Access-Client-Secret': process.env.OLLAMA_CLIENT_SECRET
+        };
+        console.log('Auth profile headers configured for CF Access');
+    }
+    console.log('Added ollama-direct auth profile');
+}
+
+// Add Gemini auth profile (used as memory embedding fallback when Ollama tunnel is down)
+if (process.env.GEMINI_API_KEY) {
+    auth.profiles['google'] = {
+        type: 'api_key',
+        provider: 'google',
+        key: process.env.GEMINI_API_KEY,
+    };
+    console.log('Added google auth profile (Gemini embedding fallback)');
+}
+
+// Add OpenRouter auth profile
+if (process.env.OPENROUTER_API_KEY) {
+    auth.profiles['openrouter'] = {
+        type: 'api_key',
+        provider: 'openrouter',
+        key: process.env.OPENROUTER_API_KEY,
+    };
+    console.log('Added openrouter auth profile');
+}
+
+fs.writeFileSync(authPath, JSON.stringify(auth, null, 2));
+console.log('Auth profiles patched successfully');
+EOFAUTH
+
+# Debug: show auth profiles contents
+echo "=== AUTH PROFILES ==="
+cat /root/.openclaw/agents/main/agent/auth-profiles.json
+echo ""
+echo "===================="
 
 # ============================================================
 # BACKGROUND SYNC LOOP
