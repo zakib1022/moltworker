@@ -57,5 +57,6 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
   if (env.OLLAMA_CONTEXT_WINDOW) envVars.OLLAMA_CONTEXT_WINDOW = env.OLLAMA_CONTEXT_WINDOW;
   // OpenRouter provider (500+ models via single API key)
   if (env.OPENROUTER_API_KEY) envVars.OPENROUTER_API_KEY = env.OPENROUTER_API_KEY;
+  if (env.GEMINI_API_KEY) envVars.GEMINI_API_KEY = env.GEMINI_API_KEY;
   return envVars;
 }
