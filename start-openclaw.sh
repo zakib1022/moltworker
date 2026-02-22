@@ -52,7 +52,6 @@ r2_configured() {
     [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ] && [ -n "$CF_ACCOUNT_ID" ]
 }
 
-R2_BUCKET="${R2_BUCKET_NAME:-moltbot-data}"
 
 setup_rclone() {
     mkdir -p "$(dirname "$RCLONE_CONF")"
