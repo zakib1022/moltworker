@@ -69,6 +69,8 @@ EOF
     echo "Rclone configured for bucket: $R2_BUCKET"
 }
 
+R2_BUCKET="${R2_BUCKET_NAME:-moltbot-data}"
+
 RCLONE_FLAGS="--transfers=16 --fast-list --s3-no-check-bucket"
 
 # ============================================================
