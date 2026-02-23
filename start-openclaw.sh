@@ -448,7 +448,6 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
         botToken: process.env.TELEGRAM_BOT_TOKEN,
         enabled: true,
         dmPolicy: dmPolicy,
-        mode: 'webhook',
         webhookUrl: (process.env.WORKER_URL || 'https://moltbot-dev.zakibclaw.com') + '/webhook/telegram',
     };
     if (process.env.TELEGRAM_DM_ALLOW_FROM) {
