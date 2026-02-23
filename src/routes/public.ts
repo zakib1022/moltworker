@@ -68,3 +68,20 @@ publicRoutes.get('/_admin/assets/*', async (c) => {
 });
 
 export { publicRoutes };
+
+// POST /webhook/* - Telegram (and future channel) webhooks
+// Must bypass CF Access since Telegram POSTs here directly from their servers
+publicRoutes.all('/webhook/*', async (c) => {
+  const sandbox = c.get('sandbox');
+  const request = c.req.raw;
+  const url = new URL(request.url);
+  console.log('[WEBHOOK]', c.req.method, url.pathname);
+
+  try {
+    const response = await sandbox.containerFetch(request, MOLTBOT_PORT);
+    return response;
+  } catch (error) {
+    console.error('[WEBHOOK] Proxy error:', error);
+    return c.json({ error: 'Container unavailable' }, 503);
+  }
+});
