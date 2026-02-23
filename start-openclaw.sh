@@ -449,6 +449,7 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
         enabled: true,
         dmPolicy: dmPolicy,
         webhookUrl: (process.env.WORKER_URL || 'https://moltbot-dev.zakibclaw.com') + '/webhook/telegram',
+        webhookSecret: process.env.OPENCLAW_GATEWAY_TOKEN || 'webhook-secret',
     };
     if (process.env.TELEGRAM_DM_ALLOW_FROM) {
         config.channels.telegram.allowFrom = process.env.TELEGRAM_DM_ALLOW_FROM.split(',');
