@@ -441,18 +441,22 @@ if (process.env.OLLAMA_BASE_URL) {
 // Telegram configuration
 // Overwrite entire channel object to drop stale keys from old R2 backups
 // that would fail OpenClaw's strict config validation (see #47)
+// Webhook mode required: Sandbox containers can't maintain long-polling to api.telegram.org
 if (process.env.TELEGRAM_BOT_TOKEN) {
     const dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
     config.channels.telegram = {
         botToken: process.env.TELEGRAM_BOT_TOKEN,
         enabled: true,
         dmPolicy: dmPolicy,
+        mode: 'webhook',
+        webhookUrl: (process.env.WORKER_URL || 'https://moltbot-dev.zakibclaw.com') + '/webhook/telegram',
     };
     if (process.env.TELEGRAM_DM_ALLOW_FROM) {
         config.channels.telegram.allowFrom = process.env.TELEGRAM_DM_ALLOW_FROM.split(',');
     } else if (dmPolicy === 'open') {
         config.channels.telegram.allowFrom = ['*'];
     }
+    console.log('Telegram webhook configured:', config.channels.telegram.webhookUrl);
 }
 
 // Discord configuration
