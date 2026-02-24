@@ -9,6 +9,11 @@ export default defineConfig({
 		cloudflare({
 			configPath: "./wrangler.jsonc",
 			persistState: false,
+			config: {
+				assets: {
+					run_worker_first: ["/webhook/*", "/ws", "/api/*", "/debug/*", "/cdp/*", "/sandbox-health", "/logo.png", "/logo-small.png"]
+				}
+			}
 		}),
 	],
 })
