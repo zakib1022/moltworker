@@ -9,12 +9,6 @@ export default defineConfig({
 		cloudflare({
 			configPath: "./wrangler.jsonc",
 			persistState: false,
-			config: {
-				assets: {
-					not_found_handling: "none",
-					run_worker_first: true
-				}
-			}
 		}),
 	],
 })
