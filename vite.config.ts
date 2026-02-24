@@ -11,7 +11,8 @@ export default defineConfig({
 			persistState: false,
 			config: {
 				assets: {
-					run_worker_first: ["/webhook/*", "/ws", "/api/*", "/debug/*", "/cdp/*", "/sandbox-health", "/logo.png", "/logo-small.png"]
+					not_found_handling: "none",
+					run_worker_first: true
 				}
 			}
 		}),
