@@ -571,6 +571,21 @@ fs.writeFileSync(authPath, JSON.stringify(auth, null, 2));
 console.log('Auth profiles patched successfully');
 EOFAUTH
 
+# === Clear provider cooldowns (prevents R2-restored blacklists from blocking startup) ===
+echo "Clearing provider cooldowns..."
+node << 'EOFCOOLDOWN'
+const fs = require('fs');
+const authPath = '/root/.openclaw/agents/main/agent/auth-profiles.json';
+try {
+    let auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+    auth.usageStats = {};
+    fs.writeFileSync(authPath, JSON.stringify(auth, null, 2));
+    console.log('Provider cooldowns cleared — all providers start fresh');
+} catch(e) {
+    console.log('Could not clear cooldowns:', e.message);
+}
+EOFCOOLDOWN
+
 # Debug: show auth profiles contents
 echo "=== AUTH PROFILES ==="
 cat /root/.openclaw/agents/main/agent/auth-profiles.json
