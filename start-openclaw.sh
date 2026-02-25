@@ -257,10 +257,10 @@ if (process.env.OLLAMA_BASE_URL) {
     config.models = config.models || {};
     config.models.providers = config.models.providers || {};
 
-    // IMPORTANT: Use openai (chat completions) API - Ollama does not support openai-responses
+    // IMPORTANT: Use openai-completions API - Ollama does not support openai-responses
     const providerEntry = {
         baseUrl: baseUrl,
-        api: 'openai',
+        api: 'openai-completions',
         models: [{ 
             id: modelId, 
             name: modelName, 
