@@ -151,6 +151,24 @@ app.route('/', publicRoutes);
 // Mount CDP routes (uses shared secret auth via query param, not CF Access)
 app.route('/cdp', cdp);
 
+// Webhook routes: proxy to container without auth (Telegram, Discord, Slack, etc.)
+app.all('/webhook/*', async (c) => {
+  const sandbox = c.get('sandbox');
+  const request = c.req.raw;
+  console.log('[WEBHOOK] Proxying:', request.method, new URL(request.url).pathname);
+
+  try {
+    await ensureMoltbotGateway(sandbox, c.env);
+  } catch (error) {
+    console.error('[WEBHOOK] Gateway not ready:', error);
+    return c.json({ error: 'Gateway not ready' }, 503);
+  }
+
+  const response = await sandbox.containerFetch(request, MOLTBOT_PORT);
+  console.log('[WEBHOOK] Response status:', response.status);
+  return response;
+});
+
 // =============================================================================
 // PROTECTED ROUTES: Cloudflare Access authentication required
 // =============================================================================
