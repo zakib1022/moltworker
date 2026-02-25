@@ -32,8 +32,8 @@ RUN mkdir -p /root/.openclaw \
     && mkdir -p /root/clawd/skills
 
 # Copy startup script
-# Build cache bust: v41-rebuild container
-ENV CACHE_BUST="2026-02-21-v41"
+# Build cache bust: v42-rebuild container
+ENV CACHE_BUST="2026-02-21-v42"
 COPY start-openclaw.sh /usr/local/bin/start-openclaw.sh
 RUN chmod +x /usr/local/bin/start-openclaw.sh
 
