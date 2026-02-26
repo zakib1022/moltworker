@@ -463,8 +463,10 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
 
 // Discord configuration
 // Discord uses a nested dm object: dm.policy, dm.allowFrom (per DiscordDmConfig)
+// groupPolicy must be 'open' for personal use — default 'allowlist' drops all
+// guild/DM messages unless specific channel IDs are allowlisted
 if (process.env.DISCORD_BOT_TOKEN) {
-    const dmPolicy = process.env.DISCORD_DM_POLICY || 'pairing';
+    const dmPolicy = process.env.DISCORD_DM_POLICY || 'open';
     const dm = { policy: dmPolicy };
     if (dmPolicy === 'open') {
         dm.allowFrom = ['*'];
@@ -473,6 +475,7 @@ if (process.env.DISCORD_BOT_TOKEN) {
         token: process.env.DISCORD_BOT_TOKEN,
         enabled: true,
         dm: dm,
+        groupPolicy: 'open',
     };
 }
 
